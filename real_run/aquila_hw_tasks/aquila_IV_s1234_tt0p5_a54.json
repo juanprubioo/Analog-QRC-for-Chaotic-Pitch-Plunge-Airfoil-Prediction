@@ -1,0 +1,20 @@
+{
+  "tag": "aquila_IV_s1234_tt0p5_a54",
+  "probe_us": 0.5,
+  "anchor_idx": 54,
+  "seed": 1234,
+  "n_atoms": 8,
+  "spacing_um": 10.0,
+  "rabi": 6.283,
+  "encoding_scale": 9.0,
+  "readout": "Z",
+  "nshots": 100,
+  "mode": "mock",
+  "amendment": "E1_ramp0.05_area_comp",
+  "ramp_us": 0.05,
+  "programmed_time_us": 0.55,
+  "effective_time_us": 0.5,
+  "submitted_utc": "2026-07-11T18:58:00+00:00",
+  "arn": "rydberg",
+  "status": "done"
+}
