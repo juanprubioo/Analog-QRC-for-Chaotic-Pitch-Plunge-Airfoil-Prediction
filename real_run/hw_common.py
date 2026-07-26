@@ -193,7 +193,7 @@ def load_raw_bits(tag):
     d = np.load(RESULT_DIR / f"{tag}_raw.npz")
     rows = []
     for s, pre, post in zip(d["status"], d["pre"], d["post"]):
-        if "Success" not in str(s):
+        if "success" not in str(s):
             continue
         if not np.all(pre == 1):
             continue
