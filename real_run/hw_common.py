@@ -44,8 +44,20 @@ AQUILA_ARN = "arn:aws:braket:us-east-1::device/qpu/quera/Aquila"
 
 ROOT = Path(__file__).resolve().parent
 TASK_DIR = ROOT / "aquila_hw_tasks"      # manifiestos por tarea (ARN + metadatos)
-RESULT_DIR = ROOT / "aquila_hw_results"  # shots crudos por tarea
 LOG_PATH = ROOT / "aquila_hw_submit.log"
+
+# ---------------- Modo real/mock: selecciona de dónde se leen/escriben los shots ----------------
+RESULT_DIRS = {
+    "real": ROOT / "aquila_hw_results",
+    "mock": ROOT / "mock_validation",
+}
+RESULT_DIR = RESULT_DIRS["real"]  # default
+
+def set_mode(mode):
+    """Cambia RESULT_DIR según el modo ('real' o 'mock') para que load_raw_bits /
+    save_raw_result lean/escriban en la carpeta correcta."""
+    global RESULT_DIR
+    RESULT_DIR = RESULT_DIRS[mode]
 
 
 # ---------------- Datos: anchors y ventanas (idéntico a run_generic/verify) ----------------
@@ -193,7 +205,7 @@ def load_raw_bits(tag):
     d = np.load(RESULT_DIR / f"{tag}_raw.npz")
     rows = []
     for s, pre, post in zip(d["status"], d["pre"], d["post"]):
-        if "Success" not in str(s):
+        if "success" not in str(s).lower():
             continue
         if not np.all(pre == 1):
             continue

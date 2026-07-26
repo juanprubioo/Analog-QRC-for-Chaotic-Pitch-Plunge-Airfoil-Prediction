@@ -58,3 +58,13 @@ pipeline needs and the full run instructions.
 Each pipeline folder documents how to regenerate every number and figure from
 the manuscript, so results can be traced back to a specific config and cache
 file. See the `docs/` subfolders for the original (Spanish) working notes.
+
+## License
+
+This repository uses a dual license: the **code** (`.py` scripts and
+notebooks) is released under the **MIT License** (see `LICENSE`); the
+**data** (`.npz`, `.csv`, `.pkl` files — simulation caches, embedding
+caches, raw hardware shot records, and result tables) is released under
+**CC BY 4.0** (see `LICENSE-DATA`). Both apply to every file in this
+repository according to its type; if you reuse the data, please credit
+the authors as described in `LICENSE-DATA`.

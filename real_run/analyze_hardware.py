@@ -21,6 +21,7 @@ from sklearn.linear_model import RidgeCV
 import hw_common as hw
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "mock"
+hw.set_mode(MODE)
 
 proto = hw.load_protocol()
 anchors, tr, te = proto["anchors"], proto["tr"], proto["te"]
@@ -132,3 +133,11 @@ fig.tight_layout()
 fig.savefig(hw.ROOT / f"hw_skill_vs_probe_{MODE}.png", dpi=300)
 fig.savefig(hw.ROOT / f"hw_skill_vs_probe_{MODE}.pdf")
 print(f"\nSaved: hw_table_{MODE}.csv, hw_embeddings_{MODE}.npz, hw_skill_vs_probe_{MODE}.png")
+
+# --- pendiente b: regresion sin intercepto hw sobre emu500 (columna b, Tabla V.E) ---
+print("\nSlope b (hardware embeddings regressed on emu500, no intercept):")
+for tt in hw.PROBES_US:
+    _m = ~np.isnan(E_hw[tt]).any(1)
+    _Em = np.asarray(cache[KEY(tt, 500)], float)[_m].ravel()
+    _Eh = E_hw[tt][_m].ravel()
+    print(f"  b(tt={tt}) = {float(_Eh @ _Em / (_Em @ _Em)):.2f}")

@@ -1,0 +1,15 @@
+Data License
+============
+
+The code in this repository is licensed under the MIT License (see LICENSE).
+
+The data files distributed in this repository — including but not limited to
+`.npz`, `.csv`, and `.pkl` files (simulation caches, embedding caches, raw
+hardware shot records, and result tables) — are licensed separately under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0).
+
+You are free to share and adapt this data for any purpose, including
+commercially, as long as you give appropriate credit. Full license text:
+https://creativecommons.org/licenses/by/4.0/
+
+Copyright (c) 2026 Juan P. Rubio, Richard G. Avella, Luisa F. Benítez, Sindy J. Higuera
