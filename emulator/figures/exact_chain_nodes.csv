@@ -1,0 +1,4 @@
+level,channel,t_node_us,value
+"single atom (analytic, V=0)",parity,0.9209999999999536,0.003969895449149389
+"exact chain, V=0",parity,0.92,0.08869096380822597
+"exact chain, V=5.42",sign,0.76,0.3113580735225243
