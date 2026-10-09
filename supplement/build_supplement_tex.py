@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""build_supplement_tex.py — Writes supplement_QMI.tex from the CSVs produced by
+make_supplement.py, so that every number in the Supplementary Information is copied
+programmatically rather than by hand.   Run from supplement/:  python3 build_supplement_tex.py
+"""
+from pathlib import Path
+import pandas as pd
+
+H = Path(__file__).resolve().parent
+f = lambda v, d=3: f"{v:+.{d}f}".replace("-", "$-$") if v < 0 else f"{v:.{d}f}"
+fs = lambda v, d=3: (f"{v:+.{d}f}").replace("-", "$-$").replace("+", "$+$")
+
+s1 = pd.read_csv(H / "S1_protocol_record.csv"); s2 = pd.read_csv(H / "S2_deg3_regularization.csv")
+s3 = pd.read_csv(H / "S3_per_state_skill.csv"); s4 = pd.read_csv(H / "S4_12atom_target.csv")
+s5 = pd.read_csv(H / "S5_postselection.csv"); s6 = pd.read_csv(H / "S6_waveform_amendment.csv")
+s7 = pd.read_csv(H / "S7_signdef_grid.csv")
+
+# ---------- S1
+cls = s1[s1.t_tot_us.isna()]
+qrc = s1[~s1.t_tot_us.isna()]
+t1_cls = "\n".join(f"{r.model.replace('alpha=1e-4', '$\\alpha=10^{-4}$')} & {f(r.skill)} [{f(r.ci_lo)}, {f(r.ci_hi)}] \\\\" for r in cls.itertuples())
+t1_q = []
+for tt in sorted(qrc.t_tot_us.unique()):
+    a = qrc[(qrc.t_tot_us == tt) & qrc.model.str.contains("fixed")].iloc[0]
+    b = qrc[(qrc.t_tot_us == tt) & qrc.model.str.contains("CV")].iloc[0]
+    t1_q.append(f"{tt:.1f} & {f(a.skill)} [{f(a.ci_lo)}, {f(a.ci_hi)}] & {f(b.skill)} [{f(b.ci_lo)}, {f(b.ci_hi)}] \\\\")
+t1_q = "\n".join(t1_q)
+d2fix = cls[cls.model.str.contains("fixed")].skill.iloc[0]; d2cv = cls[cls.model.str.contains("deg 2, CV")].skill.iloc[0]
+lin3 = cls[cls.model.str.contains("linear")].skill.iloc[0]
+
+# ---------- S2
+t2 = "\n".join(f"{r.variant.replace('..', '--')} & {f(r.skill)} & {r.alpha_median:.3g} & {r.alpha_min:.3g}--{r.alpha_max:.3g} \\\\"
+               for r in s2.itertuples())
+d3 = s2.skill.iloc[0]; d3std = s2.skill.iloc[-1]
+
+# ---------- S3
+nm = {"alpha": r"$\alpha$", "alpha_dot": r"$\dot\alpha$", "xi": r"$\xi$", "xi_dot": r"$\dot\xi$"}
+t3 = []
+for st in ["alpha", "alpha_dot", "xi", "xi_dot"]:
+    r = s3[s3.state == st].set_index("horizon")
+    t3.append(f"{nm[st]} & {100 * r.loc['pooled', 'share_of_persistence_mse']:.1f} & "
+              + " & ".join(f"{f(r.loc[h, 'skill_qrc'], 2)} / {f(r.loc[h, 'skill_lin'], 2)}" for h in ["1tau_c", "2tau_c", "3tau_c", "pooled"])
+              + " \\\\")
+t3 = "\n".join(t3)
+share_xi = 100 * s3[(s3.state == "xi") & (s3.horizon == "pooled")].share_of_persistence_mse.iloc[0]
+compq = s3[s3.horizon == "pooled"].skill_qrc.mean(); compl = s3[s3.horizon == "pooled"].skill_lin.mean()
+
+# ---------- S4
+t4 = "\n".join(f"{r.t_tot_us:.1f} & {r.target} & {f(r.skill_qrc)} & {f(r.skill_ngrc_best)} & {fs(r.gap)} \\\\" for r in s4.itertuples())
+
+# ---------- S5
+t5 = "\n".join(f"{r.probe_us:.2f} & {r.n_anchors} & {r.survival_mean:.3f} [{r.survival_min:.2f}, {r.survival_max:.2f}] & "
+               f"{fs(r.r_survival_projection)} ({r.p_value:.2f}) & {fs(r.proj_above_median)} & {fs(r.proj_below_median)} \\\\"
+               for r in s5.itertuples())
+n5 = s5[s5.probe_us == 0.7].iloc[0]
+
+# ---------- S6
+t6 = []
+for r in s6.itertuples():
+    wf = "E1 (submitted)" if r.waveform.startswith("E1") else "earlier ramp"
+    b = f"{r.slope_b:.3f}" if pd.notna(getattr(r, "slope_b", float("nan"))) else "--"
+    t6.append(f"{wf} & {r.probe_us:.2f} & {f(r.skill)} & {r.rho_vs_emu500:.3f} & {r.rho_sampling_baseline:.3f} & {b} \\\\")
+t6 = "\n".join(t6)
+e1 = s6[s6.waveform.str.startswith("E1")].set_index("probe_us").skill
+v15 = s6[~s6.waveform.str.startswith("E1")].set_index("probe_us").skill
+
+# ---------- S7
+t7 = "\n".join(f"{r.encoding} & {r.a_um:.0f} & {r.t_tot_us:.1f} & {f(r.skill_inf)} & {f(r.skill_500_median)} [{f(r.ci_lo)}, {f(r.ci_hi)}] & {f(r.seed_min)} \\\\"
+               for r in s7.sort_values(["encoding", "a_um", "t_tot_us"], ascending=[False, True, True]).itertuples())
+
+tex = rf"""\documentclass[pdflatex,sn-mathphys-num]{{sn-jnl}}
+\usepackage{{graphicx,amsmath,amssymb,booktabs,siunitx,xcolor,manyfoot}}
+\renewcommand{{\thetable}}{{S\arabic{{table}}}}
+\renewcommand{{\thefigure}}{{S\arabic{{figure}}}}
+\renewcommand{{\thesection}}{{S\arabic{{section}}}}
+\raggedbottom
+\begin{{document}}
+\title[Supplementary Information]{{Supplementary Information for ``Parity degeneracy and probe-time anti-resonances in neutral-atom quantum reservoir computing''}}
+\author*[1]{{\fnm{{Juan P.}} \sur{{Rubio}}}}\email{{jprubioo@libertadores.edu.co}}
+\author[1]{{\fnm{{Richard G.}} \sur{{Avella}}}}
+\author[1]{{\fnm{{Luisa F.}} \sur{{Ben\'itez}}}}
+\author[2]{{\fnm{{Sindy J.}} \sur{{Higuera}}}}
+\affil*[1]{{\orgdiv{{Department of Aeronautical Engineering}}, \orgname{{Fundaci\'on Universitaria Los Libertadores}}, \orgaddress{{\city{{Bogot\'a}}, \country{{Colombia}}}}}}
+\affil[2]{{\orgname{{Instituto Nacional de Metrolog\'ia de Colombia (INM)}}, \orgaddress{{\city{{Bogot\'a}}, \country{{Colombia}}}}}}
+\abstract{{This document collects the checks referred to in the main text. Every number and figure is regenerated by \texttt{{supplement/make\_supplement.py}} from the cached embeddings and hardware records of the public repository; no emulation or hardware access is required. Section and equation references without the prefix S refer to the main text.}}
+\maketitle
+
+\section{{Protocol-design record}}\label{{sec:s1}}
+
+The evaluation protocol of Sec.~3 was not fixed in its first form. Two changes to the readout were made after an initial analysis showed they altered the comparison, and both were applied to every model. Table~\ref{{tab:s1}} documents their effect on the first three noise seeds, the configuration in which they were found.
+
+First, the degree-2 NG-RC baseline originally used a fixed ridge penalty $\alpha=10^{{-4}}$. With 45 polynomial features and 44 training anchors this leaves the fit essentially unregularized, and the skill was {f(d2fix)}; selecting the penalty by cross-validation raises it to {f(d2cv)}. A fixed-penalty baseline would therefore have been an artificially weak comparator. Second, the QRC readout originally used the same fixed penalty. Cross-validation changes the QRC skill by up to $0.7$ at individual total times and removes the deep negative excursions of the total-time sweep, which were an artifact of under-regularization against 500-shot noise rather than a property of the reservoir. Since then, every readout in the study, quantum or classical, selects its penalty by cross-validation on the training anchors. The classical menu was further extended with degree-3 NG-RC and the dimension-matched random-feature control before the six-seed analysis of the main text.
+
+\begin{{table}}[htb]
+\caption{{Effect of the readout regularization, base geometry, first three noise seeds. Brackets: 95\% bootstrap intervals. Linear ridge (CV): {f(lin3)}.}}\label{{tab:s1}}
+\begin{{tabular}}{{@{{}}lc@{{}}}}
+\toprule
+Classical model & Skill \\
+\midrule
+{t1_cls}
+\botrule
+\end{{tabular}}
+
+\vspace{{6pt}}
+\begin{{tabular}}{{@{{}}ccc@{{}}}}
+\toprule
+$t_{{\mathrm{{tot}}}}$ (\si{{\micro\second}}) & QRC, fixed $\alpha=10^{{-4}}$ & QRC, CV \\
+\midrule
+{t1_q}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\section{{Degree-3 NG-RC regularization}}\label{{sec:s2}}
+
+Degree-3 NG-RC maps the 8-dimensional window to 165 polynomial features, fitted to 44 training anchors, and its skill in the base geometry is {f(d3)}. Table~\ref{{tab:s2}} shows that this collapse is not a failure of the penalty search. The cross-validated penalty lies in the interior of the default grid for every seed and horizon, and extending the grid by five decades in either direction leaves both the selected penalties and the skill unchanged. Standardizing the polynomial features after expansion, so that the ridge penalty acts uniformly on them, improves the skill only to {f(d3std)}. The collapse is a small-sample effect; with 80 or more training anchors (fixed-test geometry, Fig.~5) degree-3 NG-RC becomes the strongest classical model.
+
+\begin{{table}}[htb]
+\caption{{Degree-3 NG-RC, base geometry, six seeds: pooled skill and the cross-validated ridge penalty over the 18 seed--horizon fits.}}\label{{tab:s2}}
+\begin{{tabular}}{{@{{}}lccc@{{}}}}
+\toprule
+Variant & Skill & Median $\alpha$ & Range of $\alpha$ \\
+\midrule
+{t2}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\section{{Per-state skill and representative predictions}}\label{{sec:s3}}
+
+The preregistered score averages the squared error over the predicted state components before pooling (Sec.~3.2), so each component contributes in proportion to the size of its increments. Table~\ref{{tab:s3}} resolves the headline comparison ($t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, 8 atoms, six seeds) by state and horizon. The plunge displacement $\xi$ carries {share_xi:.0f}\% of the persistence error and therefore dominates the pooled score. It is the only state on which the reservoir matches or exceeds linear ridge; for the pitch $\alpha$ and both velocities the reservoir is clearly behind, and at $H=\tau_c$ its pitch skill is negative. Averaging the per-state skills with equal weight instead gives {f(compq)} for QRC against {f(compl)} for linear ridge, a wider gap than the preregistered pooled comparison ($0.698$ against $0.714$). Figure~\ref{{fig:s3}} shows representative predictions for pitch and plunge on the test block.
+
+\begin{{table}}[htb]
+\caption{{Skill by predicted state and horizon, QRC / linear ridge (base geometry, $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, six seeds). Share: fraction of the pooled persistence error carried by each state.}}\label{{tab:s3}}
+\begin{{tabular}}{{@{{}}lccccc@{{}}}}
+\toprule
+State & Share (\%) & $H=\tau_c$ & $2\tau_c$ & $3\tau_c$ & Pooled \\
+\midrule
+{t3}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\begin{{figure}}[htb]
+\centering
+\includegraphics[width=\textwidth]{{figS_predictions.pdf}}
+\caption{{Predicted and true finite-horizon increments of pitch and plunge on the 22 test anchors, seed 1234, $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$. Titles give the per-panel skill for this seed.}}\label{{fig:s3}}
+\end{{figure}}
+
+\section{{Twelve-atom target definition}}\label{{sec:s4}}
+
+The 12-atom configuration of Table~7 encodes all six states and predicts all six, whereas the 8- and 16-atom configurations predict the four mechanical states. Restricting the 12-atom target to the four mechanical states, with the same embeddings and readout, leaves skill and gap unchanged to the second decimal (Table~\ref{{tab:s4}}); the auxiliary aerodynamic states contribute negligibly to the pooled error.
+
+\begin{{table}}[htb]
+\caption{{Twelve-atom configuration with six-state and four-state targets (first three seeds). Gap: QRC minus best NG-RC (CV) on the same window.}}\label{{tab:s4}}
+\begin{{tabular}}{{@{{}}clccc@{{}}}}
+\toprule
+$t_{{\mathrm{{tot}}}}$ (\si{{\micro\second}}) & Target & QRC & Best NG-RC & Gap \\
+\midrule
+{t4}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\section{{Hardware post-selection}}\label{{sec:s5}}
+
+Shots in which any atom failed to load were discarded before computing the hardware embeddings (23.9\% of shots). Atom sorting precedes the encoding pulse, so survival cannot depend on the encoded detunings, but a correlation between survival and the hardware--emulator deviation could still bias the node skill. For each probe we define the mean deviation direction $\hat{{\mathbf{{u}}}}=\overline{{\mathbf{{d}}}}/\lVert\overline{{\mathbf{{d}}}}\rVert$, with $\mathbf{{d}}_k=E^{{\mathrm{{hw}}}}_k-E^{{\mathrm{{emu,500}}}}_k$ the deviation of anchor $k$, and project each anchor on it. Table~\ref{{tab:s5}} shows that the projection is uncorrelated with the surviving shot fraction at every probe; at the node, $r={n5.r_survival_projection:.2f}$ ($p={n5.p_value:.2f}$), and anchors above and below the median survival have the same mean projection ({n5.proj_above_median:.3f} and {n5.proj_below_median:.3f}).
+
+\begin{{table}}[htb]
+\caption{{Surviving shot fraction and its relation to the hardware--emulator deviation (seed 1234). $r$: Pearson correlation between survival and projection, with $p$-value. Proj.: mean projection for anchors above (high) and below (low) the median survival.}}\label{{tab:s5}}
+\begin{{tabular}}{{@{{}}cccccc@{{}}}}
+\toprule
+$t$ (\si{{\micro\second}}) & Anchors & Survival [range] & $r$ ($p$) & Proj., high & Proj., low \\
+\midrule
+{t5}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\section{{Waveform amendment}}\label{{sec:s6}}
+
+Aquila requires the drive and the detuning to start and end at zero, so the constant quench of the emulator cannot be run directly. Before submission, the programmed waveforms were executed on Braket's local, noise-free analog Hamiltonian simulator with the same program and parsing as the hardware path (100 shots, seed 1234). The submitted waveform E1 uses \SI{{0.05}}{{\micro\second}} linear ramps, set by the slew-rate limit of $250~\mathrm{{rad}}/\si{{\micro\second}}^2$ and the \SI{{50}}{{ns}} time step, with programmed durations of $t+\SI{{0.05}}{{\micro\second}}$ so that the plateau-equivalent time equals the nominal probe. Its embeddings correlate with the 500-shot emulator as closely as two emulator samplings do, with unit slope, and it reproduces the node ({f(e1.loc[0.7])}). An earlier implementation with ramps of $\min(\SI{{0.2}}{{\micro\second}},t/4)$ erased the node ({f(v15.loc[0.7])}), which would have invalidated the preregistered contrast for reasons unrelated to decoherence (Table~\ref{{tab:s6}}).
+
+\begin{{table}}[htb]
+\caption{{Noise-free simulation of the programmed waveforms. $\rho$: correlation of embeddings with the 500-shot constant-profile emulator; sampling baseline: the same correlation between two emulator samplings (100 and 500 shots); $b$: no-intercept slope onto the emulator.}}\label{{tab:s6}}
+\begin{{tabular}}{{@{{}}lccccc@{{}}}}
+\toprule
+Waveform & $t$ (\si{{\micro\second}}) & Skill & $\rho$ & Sampling baseline & $b$ \\
+\midrule
+{t6}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\section{{Sign-definite encoding: full grid}}\label{{sec:s7}}
+
+Table~\ref{{tab:s7}} extends Table~3 of the main text to the full grid of total times and spacings, computed by exact eight-atom evolution with 500-shot resampling (median of ten realizations; Sec.~4.3). Values at $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$ differ from the Bloqade values of Table~3 by shot noise only.
+
+\begin{{table}}[htb]
+\caption{{Pooled skill for both encodings over the full grid (8 atoms, two-probe $Z$, base geometry, six seeds). Brackets: 95\% bootstrap intervals of the median realization.}}\label{{tab:s7}}
+\begin{{tabular}}{{@{{}}lccccc@{{}}}}
+\toprule
+Encoding & $a$ (\si{{\micro\meter}}) & $t_{{\mathrm{{tot}}}}$ (\si{{\micro\second}}) & Infinite shots & 500 shots & Worst seed \\
+\midrule
+{t7}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+\end{{document}}
+"""
+(H / "supplement_QMI.tex").write_text(tex, encoding="utf-8")
+print("Wrote supplement_QMI.tex")
