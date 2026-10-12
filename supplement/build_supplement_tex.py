@@ -12,6 +12,8 @@ fs = lambda v, d=3: (f"{v:+.{d}f}").replace("-", "$-$").replace("+", "$+$")
 
 s1 = pd.read_csv(H / "S1_protocol_record.csv"); s2 = pd.read_csv(H / "S2_deg3_regularization.csv")
 s3 = pd.read_csv(H / "S3_per_state_skill.csv"); s4 = pd.read_csv(H / "S4_12atom_target.csv")
+ph = pd.read_csv(H.parent / "emulator" / "results" / "paired_diff.csv")
+sc = pd.read_csv(H.parent / "emulator" / "figures" / "tab_scaling.csv")
 s5 = pd.read_csv(H / "S5_postselection.csv"); s6 = pd.read_csv(H / "S6_waveform_amendment.csv")
 s7 = pd.read_csv(H / "S7_signdef_grid.csv")
 
@@ -45,6 +47,16 @@ t3 = "\n".join(t3)
 share_xi = 100 * s3[(s3.state == "xi") & (s3.horizon == "pooled")].share_of_persistence_mse.iloc[0]
 compq = s3[s3.horizon == "pooled"].skill_qrc.mean(); compl = s3[s3.horizon == "pooled"].skill_lin.mean()
 
+# ---------- S3b per-horizon pooled
+th = []
+for r in ph[ph.scope != "pooled"].itertuples():
+    k = int(r.scope.split("=")[1][0])
+    th.append(f"{'$\\tau_c$' if k == 1 else f'${k}\\tau_c$'} & {f(r.S_qrc)} [{f(r.S_qrc_lo)}, {f(r.S_qrc_hi)}] & {f(r.S_lin)} [{f(r.S_lin_lo)}, {f(r.S_lin_hi)}] \\\\")
+pr_ = ph[ph.scope == "pooled"].iloc[0]
+th.append(f"pooled & {f(pr_.S_qrc)} & {f(pr_.S_lin)} \\\\")
+th = "\n".join(th)
+# ---------- scaling table
+tsc = "\n".join(f"{int(r.atoms)} & {int(r.window_dim)} & {r.tt:.1f} & {f(r.skill_qrc)} & {f(max(r.skill_lin, r.skill_deg2))} & {fs(r.gap)} \\\\" for r in sc.itertuples())
 # ---------- S4
 t4 = "\n".join(f"{r.t_tot_us:.1f} & {r.target} & {f(r.skill_qrc)} & {f(r.skill_ngrc_best)} & {fs(r.gap)} \\\\" for r in s4.itertuples())
 
@@ -128,7 +140,7 @@ Variant & Skill & Median $\alpha$ & Range of $\alpha$ \\
 
 \section{{Per-state skill and representative predictions}}\label{{sec:s3}}
 
-The preregistered score averages the squared error over the predicted state components before pooling (Sec.~3.2), so each component contributes in proportion to the size of its increments. Table~\ref{{tab:s3}} resolves the headline comparison ($t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, 8 atoms, six seeds) by state and horizon. The plunge displacement $\xi$ carries {share_xi:.0f}\% of the persistence error and therefore dominates the pooled score. It is the only state on which the reservoir matches or exceeds linear ridge; for the pitch $\alpha$ and both velocities the reservoir is clearly behind, and at $H=\tau_c$ its pitch skill is negative. Averaging the per-state skills with equal weight instead gives {f(compq)} for QRC against {f(compl)} for linear ridge, a wider gap than the preregistered pooled comparison ($0.698$ against $0.714$). Figure~\ref{{fig:s3}} shows representative predictions for pitch and plunge on the test block.
+The preregistered score averages the squared error over the predicted state components before pooling (Sec.~3.2), so each component contributes in proportion to the size of its increments. Table~\ref{{tab:s3}} resolves the headline comparison ($t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, 8 atoms, six seeds) by state and horizon. The plunge displacement $\xi$ carries {share_xi:.0f}\% of the persistence error and therefore dominates the pooled score. It is the only state on which the reservoir matches or exceeds linear ridge; for the pitch $\alpha$ and both velocities the reservoir is clearly behind, and at $H=\tau_c$ its pitch skill is negative. Averaging the per-state skills with equal weight instead gives {f(compq)} for QRC against {f(compl)} for linear ridge, a wider gap than the preregistered pooled comparison ($0.698$ against $0.714$). Table~\ref{{tab:s3h}} gives the pooled comparison by horizon, and Fig.~\ref{{fig:s3}} shows representative predictions for pitch and plunge on the test block.
 
 \begin{{table}}[htb]
 \caption{{Skill by predicted state and horizon, QRC / linear ridge (base geometry, $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, six seeds). Share: fraction of the pooled persistence error carried by each state.}}\label{{tab:s3}}
@@ -141,15 +153,39 @@ State & Share (\%) & $H=\tau_c$ & $2\tau_c$ & $3\tau_c$ & Pooled \\
 \end{{tabular}}
 \end{{table}}
 
+\begin{{table}}[htb]
+\caption{{Pooled skill by prediction horizon at the preregistered operating point (base geometry, $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$, six seeds), with $t_\lambda\approx189$~tu the Lyapunov time. Brackets: 95\% bootstrap intervals. Paired pooled difference $S_{{\mathrm{{lin}}}}-S_{{\mathrm{{QRC}}}}=+{pr_["diff"]:.3f}$ [{fs(pr_.diff_lo)}, {fs(pr_.diff_hi)}].}}\label{{tab:s3h}}
+\begin{{tabular}}{{@{{}}lcc@{{}}}}
+\toprule
+$H$ ($H/t_\lambda=0.055$, $0.109$, $0.164$) & QRC & Linear ridge \\
+\midrule
+{th}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
 \begin{{figure}}[htb]
 \centering
 \includegraphics[width=\textwidth]{{figS_predictions.pdf}}
 \caption{{Predicted and true finite-horizon increments of pitch and plunge on the 22 test anchors, seed 1234, $t_{{\mathrm{{tot}}}}=\SI{{1.0}}{{\micro\second}}$. Titles give the per-panel skill for this seed.}}\label{{fig:s3}}
 \end{{figure}}
 
-\section{{Twelve-atom target definition}}\label{{sec:s4}}
+\section{{Atom number and twelve-atom target definition}}\label{{sec:s4}}
 
-The 12-atom configuration of Table~7 encodes all six states and predicts all six, whereas the 8- and 16-atom configurations predict the four mechanical states. Restricting the 12-atom target to the four mechanical states, with the same embeddings and readout, leaves skill and gap unchanged to the second decimal (Table~\ref{{tab:s4}}); the auxiliary aerodynamic states contribute negligibly to the pooled error.
+Table~\ref{{tab:s4a}} gives the atom-number diagnostic summarized in Sec.~7.2. The atom number equals the flattened window dimension, so this is an input-window scaling rather than a pure register scaling: 8 atoms encode the four mechanical states at two times, 12 atoms all six states at two times, and 16 atoms the four mechanical states at four times. The 16-atom reservoir reaches the highest skill, but the classical model on the same longer window improves as well. The 12-atom dip at $t_{{\mathrm{{tot}}}}=\SI{{2.0}}{{\micro\second}}$ is consistent with the fixed probe pair falling near a node: at \SI{{1.0}}{{\micro\second}} the same configuration recovers. The register-only control of the main text, four non-encoding atoms appended to the 8-atom chain, lowers the skill from $0.691$ to $0.119$ [$-0.180$, $0.354$].
+
+\begin{{table}}[htb]
+\caption{{Input-window and atom-number scaling (first three seeds). Best classical: best of linear ridge and degree-2 NG-RC (CV) on the same window. Gap: QRC minus best classical.}}\label{{tab:s4a}}
+\begin{{tabular}}{{@{{}}cccccc@{{}}}}
+\toprule
+Atoms & Window dim. & $t_{{\mathrm{{tot}}}}$ (\si{{\micro\second}}) & QRC & Best classical & Gap \\
+\midrule
+{tsc}
+\botrule
+\end{{tabular}}
+\end{{table}}
+
+The 12-atom configuration encodes all six states and predicts all six, whereas the 8- and 16-atom configurations predict the four mechanical states. Restricting the 12-atom target to the four mechanical states, with the same embeddings and readout, leaves skill and gap unchanged to the second decimal (Table~\ref{{tab:s4}}); the auxiliary aerodynamic states contribute negligibly to the pooled error.
 
 \begin{{table}}[htb]
 \caption{{Twelve-atom configuration with six-state and four-state targets (first three seeds). Gap: QRC minus best NG-RC (CV) on the same window.}}\label{{tab:s4}}
